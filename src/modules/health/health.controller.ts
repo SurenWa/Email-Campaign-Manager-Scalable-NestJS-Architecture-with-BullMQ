@@ -5,6 +5,7 @@ import {
     HealthCheckService,
     MemoryHealthIndicator,
 } from '@nestjs/terminus';
+import { Public } from '../auth/decorators/public.decorator';
 
 @ApiTags('Health')
 @Controller('health')
@@ -14,16 +15,17 @@ export class HealthController {
         private memory: MemoryHealthIndicator,
     ) {}
 
+    @Public()
     @Get()
     @HealthCheck()
     @ApiOperation({ summary: 'Check application health' })
     check() {
         return this.health.check([
-            // Check memory heap (fails if > 150MB)
             () => this.memory.checkHeap('memory_heap', 150 * 1024 * 1024),
         ]);
     }
 
+    @Public()
     @Get('ping')
     @ApiOperation({ summary: 'Simple ping endpoint' })
     ping() {
