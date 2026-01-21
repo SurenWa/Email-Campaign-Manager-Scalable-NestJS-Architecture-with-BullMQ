@@ -13,6 +13,7 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam } from '@nestjs/swagger';
 import { CampaignService } from './campaign.service';
+import { EmailQueueService } from '../email-queue/email-queue.service';
 import { CreateCampaignDto, UpdateCampaignDto, ScheduleCampaignDto, CampaignQueryDto } from './dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { CampaignOwnerGuard } from './guards/campaign-owner.guard';
@@ -21,7 +22,10 @@ import { CampaignOwnerGuard } from './guards/campaign-owner.guard';
 @ApiBearerAuth()
 @Controller('campaigns')
 export class CampaignController {
-    constructor(private readonly campaignService: CampaignService) {}
+    constructor(
+        private readonly campaignService: CampaignService,
+        private readonly emailQueueService: EmailQueueService,
+    ) {}
 
     @Post()
     @ApiOperation({ summary: 'Create a new campaign' })
@@ -43,6 +47,13 @@ export class CampaignController {
     @ApiResponse({ status: 200, description: 'Campaign statistics' })
     async getStats(@CurrentUser('sub') userId: string) {
         return this.campaignService.getStats(userId);
+    }
+
+    @Get('queue-stats')
+    @ApiOperation({ summary: 'Get queue statistics' })
+    @ApiResponse({ status: 200, description: 'Queue statistics' })
+    async getQueueStats() {
+        return this.emailQueueService.getQueueStats();
     }
 
     @Get(':id')
@@ -99,5 +110,18 @@ export class CampaignController {
     @ApiResponse({ status: 404, description: 'Campaign not found' })
     async cancelSchedule(@Param('id') id: string) {
         return this.campaignService.cancelSchedule(id);
+    }
+
+    @Post(':id/send')
+    @UseGuards(CampaignOwnerGuard)
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: 'Send a campaign immediately' })
+    @ApiParam({ name: 'id', description: 'Campaign ID' })
+    @ApiResponse({ status: 200, description: 'Campaign queued for sending' })
+    @ApiResponse({ status: 400, description: 'Cannot send campaign' })
+    @ApiResponse({ status: 404, description: 'Campaign not found' })
+    async sendNow(@Param('id') id: string, @CurrentUser('sub') userId: string) {
+        await this.emailQueueService.sendCampaignNow(id, userId);
+        return { message: 'Campaign queued for sending' };
     }
 }

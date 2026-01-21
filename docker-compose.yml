@@ -19,6 +19,23 @@ services:
             timeout: 5s
             retries: 5
 
+    redis:
+        image: redis:7-alpine
+        container_name: email-campaign-redis
+        restart: unless-stopped
+        ports:
+            - '6379:6379'
+        volumes:
+            - redis_data:/data
+        healthcheck:
+            test: ['CMD', 'redis-cli', 'ping']
+            interval: 10s
+            timeout: 5s
+            retries: 5
+        command: redis-server --appendonly yes
+
 volumes:
     postgres_data:
         name: email-campaign-postgres-data
+    redis_data:
+        name: email-campaign-redis-data

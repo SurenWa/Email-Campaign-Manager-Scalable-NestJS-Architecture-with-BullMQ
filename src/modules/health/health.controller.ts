@@ -2,6 +2,7 @@ import { Controller, Get } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { Public } from '../auth/decorators/public.decorator';
 import { PrismaHealthIndicator } from './prisma-health.indicator';
+import { RedisHealthIndicator } from './redis-health.indicator';
 
 interface HealthCheckResponse {
     status: 'ok' | 'error';
@@ -13,17 +14,21 @@ interface HealthCheckResponse {
 @ApiTags('Health')
 @Controller('health')
 export class HealthController {
-    constructor(private prismaHealth: PrismaHealthIndicator) {}
+    constructor(
+        private prismaHealth: PrismaHealthIndicator,
+        private redisHealth: RedisHealthIndicator,
+    ) {}
 
     @Public()
     @Get()
     @ApiOperation({ summary: 'Check application health' })
     async check(): Promise<HealthCheckResponse> {
         const dbHealth = await this.prismaHealth.isHealthy('database');
+        const redisHealthResult = await this.redisHealth.isHealthy('redis');
+
         const memoryUsage = process.memoryUsage();
         const heapUsedMB = Math.round(memoryUsage.heapUsed / 1024 / 1024);
         const heapTotalMB = Math.round(memoryUsage.heapTotal / 1024 / 1024);
-
         const memoryStatus = heapUsedMB < 150 ? 'up' : 'down';
 
         const info: Record<string, { status: string; message?: string }> = {};
@@ -36,6 +41,16 @@ export class HealthController {
             error['database'] = {
                 status: 'down',
                 message: dbHealth['database']?.message,
+            };
+        }
+
+        // Redis health
+        if (redisHealthResult['redis']?.status === 'up') {
+            info['redis'] = { status: 'up' };
+        } else {
+            error['redis'] = {
+                status: 'down',
+                message: redisHealthResult['redis']?.message,
             };
         }
 
