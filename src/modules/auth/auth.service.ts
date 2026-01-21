@@ -1,38 +1,29 @@
-/* eslint-disable @typescript-eslint/require-await */
-import {
-    Injectable,
-    UnauthorizedException,
-    ConflictException,
-} from '@nestjs/common';
+import { Injectable, UnauthorizedException, ConflictException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
+import { PrismaService } from '../../common/prisma';
 import { RegisterDto, LoginDto, AuthResponseDto } from './dto';
 import { Role } from './enums/role.enum';
-import { JwtPayload } from './strategies/jwt.strategy';
-
-// Temporary in-memory user storage (will be replaced with Prisma in Phase 3)
-interface User {
-    id: string;
-    email: string;
-    name: string;
-    password: string;
-    role: Role;
-    createdAt: Date;
-}
+import type { JwtPayload } from './strategies/jwt.strategy';
+import type { User } from '@prisma/client';
 
 @Injectable()
 export class AuthService {
-    // Temporary storage - will be replaced with database in Phase 3
-    private users: User[] = [];
     private readonly SALT_ROUNDS = 10;
 
-    constructor(private jwtService: JwtService) {}
+    constructor(
+        private prisma: PrismaService,
+        private jwtService: JwtService,
+    ) {}
 
     async register(registerDto: RegisterDto): Promise<AuthResponseDto> {
         const { email, name, password } = registerDto;
 
         // Check if user already exists
-        const existingUser = this.users.find((u) => u.email === email);
+        const existingUser = await this.prisma.user.findUnique({
+            where: { email },
+        });
+
         if (existingUser) {
             throw new ConflictException('User with this email already exists');
         }
@@ -40,28 +31,26 @@ export class AuthService {
         // Hash password
         const hashedPassword = await bcrypt.hash(password, this.SALT_ROUNDS);
 
-        // Create user
-        const user: User = {
-            id: this.generateId(),
-            email,
-            name,
-            password: hashedPassword,
-            role: Role.USER,
-            createdAt: new Date(),
-        };
-
-        this.users.push(user);
+        // Create user in database
+        const user = await this.prisma.user.create({
+            data: {
+                email,
+                name,
+                password: hashedPassword,
+                role: Role.USER.toUpperCase() as 'USER' | 'ADMIN',
+            },
+        });
 
         // Generate JWT
-        const tokens = await this.generateTokens(user);
+        const accessToken = await this.generateToken(user);
 
         return {
-            accessToken: tokens.accessToken,
+            accessToken,
             user: {
                 id: user.id,
                 email: user.email,
                 name: user.name,
-                role: user.role,
+                role: user.role.toLowerCase(),
             },
         };
     }
@@ -70,7 +59,10 @@ export class AuthService {
         const { email, password } = loginDto;
 
         // Find user
-        const user = this.users.find((u) => u.email === email);
+        const user = await this.prisma.user.findUnique({
+            where: { email },
+        });
+
         if (!user) {
             throw new UnauthorizedException('Invalid credentials');
         }
@@ -82,48 +74,53 @@ export class AuthService {
         }
 
         // Generate JWT
-        const tokens = await this.generateTokens(user);
+        const accessToken = await this.generateToken(user);
 
         return {
-            accessToken: tokens.accessToken,
+            accessToken,
             user: {
                 id: user.id,
                 email: user.email,
                 name: user.name,
-                role: user.role,
+                role: user.role.toLowerCase(),
             },
         };
     }
 
     async validateUser(payload: JwtPayload): Promise<User | null> {
-        const user = this.users.find((u) => u.id === payload.sub);
-        return user ?? null;
+        return this.prisma.user.findUnique({
+            where: { id: payload.sub },
+        });
     }
 
-    getProfile(userId: string): Omit<User, 'password'> | null {
-        const user = this.users.find((u) => u.id === userId);
-        if (!user) {
-            return null;
-        }
+    async getProfile(userId: string) {
+        const user = await this.prisma.user.findUnique({
+            where: { id: userId },
+            select: {
+                id: true,
+                email: true,
+                name: true,
+                role: true,
+                createdAt: true,
+            },
+        });
 
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const { password, ...userWithoutPassword } = user;
-        return userWithoutPassword;
+        return user;
     }
 
-    private async generateTokens(user: User): Promise<{ accessToken: string }> {
+    async getUserById(userId: string): Promise<User | null> {
+        return this.prisma.user.findUnique({
+            where: { id: userId },
+        });
+    }
+
+    private async generateToken(user: User): Promise<string> {
         const payload: JwtPayload = {
             sub: user.id,
             email: user.email,
-            role: user.role,
+            role: user.role.toLowerCase(),
         };
 
-        const accessToken = await this.jwtService.signAsync(payload);
-
-        return { accessToken };
-    }
-
-    private generateId(): string {
-        return `user_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+        return this.jwtService.signAsync(payload);
     }
 }

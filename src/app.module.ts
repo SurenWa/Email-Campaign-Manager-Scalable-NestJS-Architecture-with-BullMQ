@@ -3,6 +3,8 @@ import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { validate } from './common/config/env.validation';
 import appConfig from './common/config/app.config';
+import jwtConfig from './common/config/jwt.config';
+import { PrismaModule } from './common/prisma';
 import { HealthModule } from './modules/health/health.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
@@ -10,24 +12,25 @@ import { RolesGuard } from './modules/auth/guards/roles.guard';
 
 @Module({
     imports: [
-        // Configuration - loaded first
+        // Configuration
         ConfigModule.forRoot({
             isGlobal: true,
             validate,
-            load: [appConfig],
+            load: [appConfig, jwtConfig],
         }),
+
+        // Database
+        PrismaModule,
 
         // Feature modules
         HealthModule,
         AuthModule,
     ],
     providers: [
-        // Global JWT Auth Guard - all routes require auth by default
         {
             provide: APP_GUARD,
             useClass: JwtAuthGuard,
         },
-        // Global Roles Guard - checks roles after auth
         {
             provide: APP_GUARD,
             useClass: RolesGuard,

@@ -7,12 +7,7 @@ import {
     HttpStatus,
     NotFoundException,
 } from '@nestjs/common';
-import {
-    ApiTags,
-    ApiOperation,
-    ApiResponse,
-    ApiBearerAuth,
-} from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { RegisterDto, LoginDto, AuthResponseDto } from './dto';
 import { Public } from './decorators/public.decorator';
@@ -65,10 +60,11 @@ export class AuthController {
     @ApiResponse({ status: 200, description: 'User profile returned' })
     @ApiResponse({ status: 401, description: 'Unauthorized' })
     getProfile(@CurrentUser('sub') userId: string): ProfileResponse {
-        const profile = this.authService.getProfile(userId);
+        const profile: any = this.authService.getProfile(userId);
         if (!profile) {
             throw new NotFoundException('User not found');
         }
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-return
         return profile;
     }
 

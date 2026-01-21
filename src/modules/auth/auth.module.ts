@@ -13,21 +13,16 @@ import { JwtStrategy } from './strategies/jwt.strategy';
             inject: [ConfigService],
             useFactory: (configService: ConfigService) => {
                 const secret = configService.get<string>('JWT_SECRET');
-                const expiresIn =
-                    configService.get<string>('JWT_EXPIRATION') ?? '1d';
+                const expiresIn = configService.get<string>('JWT_EXPIRATION') ?? '1d';
 
                 if (!secret) {
-                    throw new Error(
-                        'JWT_SECRET environment variable is not defined',
-                    );
+                    throw new Error('JWT_SECRET environment variable is not defined');
                 }
 
                 return {
                     secret,
                     signOptions: {
-                        expiresIn: expiresIn as
-                            | `${number}${'s' | 'm' | 'h' | 'd'}`
-                            | number,
+                        expiresIn: expiresIn as `${number}${'s' | 'm' | 'h' | 'd'}` | number,
                     },
                 };
             },

@@ -29,9 +29,7 @@ async function bootstrap(): Promise<void> {
     // Swagger setup
     const swaggerConfig = new DocumentBuilder()
         .setTitle('Email Campaign Manager')
-        .setDescription(
-            'API for managing email campaigns with background processing',
-        )
+        .setDescription('API for managing email campaigns with background processing')
         .setVersion('1.0')
         .addBearerAuth()
         .build();
