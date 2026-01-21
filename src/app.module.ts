@@ -7,6 +7,7 @@ import jwtConfig from './common/config/jwt.config';
 import { PrismaModule } from './common/prisma';
 import { HealthModule } from './modules/health/health.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { CampaignModule } from './modules/campaign/campaign.module';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
 import { RolesGuard } from './modules/auth/guards/roles.guard';
 
@@ -25,6 +26,7 @@ import { RolesGuard } from './modules/auth/guards/roles.guard';
         // Feature modules
         HealthModule,
         AuthModule,
+        CampaignModule,
     ],
     providers: [
         {
