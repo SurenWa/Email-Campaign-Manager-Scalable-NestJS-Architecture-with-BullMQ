@@ -13,6 +13,7 @@ import { EmailQueueService, CAMPAIGN_QUEUE, EMAIL_QUEUE } from './email-queue.se
                 connection: {
                     host: configService.get<string>('REDIS_HOST') ?? 'localhost',
                     port: configService.get<number>('REDIS_PORT') ?? 6379,
+                    password: configService.get<string>('REDIS_PASSWORD'),
                 },
                 defaultJobOptions: {
                     attempts: 3,
@@ -31,6 +32,7 @@ import { EmailQueueService, CAMPAIGN_QUEUE, EMAIL_QUEUE } from './email-queue.se
                 connection: {
                     host: configService.get<string>('REDIS_HOST') ?? 'localhost',
                     port: configService.get<number>('REDIS_PORT') ?? 6379,
+                    password: configService.get<string>('REDIS_PASSWORD'),
                 },
             }),
         }),

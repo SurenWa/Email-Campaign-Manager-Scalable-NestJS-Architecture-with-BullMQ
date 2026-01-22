@@ -6,7 +6,7 @@
   "private": true,
   "license": "UNLICENSED",
   "scripts": {
-    "build": "nest build",
+    "build": "nest build && tsc src/worker.ts src/worker.module.ts --outDir dist --esModuleInterop --skipLibCheck --resolveJsonModule",
     "start": "nest start",
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
@@ -26,7 +26,22 @@
     "db:reset": "dotenv -e .env -- npx prisma migrate reset",
     "docker:up": "docker-compose up -d",
     "docker:down": "docker-compose down",
-    "docker:logs": "docker-compose logs -f"
+    "docker:logs": "docker-compose logs -f",
+
+
+    "docker:dev": "docker-compose --env-file .env.docker up --build",
+    "docker:dev:detach": "docker-compose --env-file .env.docker up --build -d",
+    "docker:dev:down": "docker-compose down",
+    "docker:dev:logs": "docker-compose logs -f",
+    "docker:dev:logs:api": "docker-compose logs -f api",
+    "docker:dev:logs:worker": "docker-compose logs -f worker",
+
+    "docker:prod:build": "docker-compose -f docker-compose.prod.yml --env-file .env.docker.prod build",
+    "docker:prod:up": "docker-compose -f docker-compose.prod.yml --env-file .env.docker.prod up -d",
+    "docker:prod:down": "docker-compose -f docker-compose.prod.yml down",
+    "docker:prod:logs": "docker-compose -f docker-compose.prod.yml logs -f",
+
+    "docker:clean": "docker-compose down -v --rmi local"
   },
   "dependencies": {
     "@nestjs/bullmq": "^11.0.4",

@@ -1,41 +1,251 @@
+# Docker Compose Configuration for Email Campaign Manager when nest js app runs locally
 version: '3.8'
 
 services:
-    postgres:
-        image: postgres:16-alpine
-        container_name: email-campaign-postgres
-        restart: unless-stopped
-        environment:
-            POSTGRES_USER: postgres
-            POSTGRES_PASSWORD: postgres
-            POSTGRES_DB: email_campaign
-        ports:
-            - '5432:5432'
-        volumes:
-            - postgres_data:/var/lib/postgresql/data
-        healthcheck:
-            test: ['CMD-SHELL', 'pg_isready -U postgres']
-            interval: 10s
-            timeout: 5s
-            retries: 5
+  # ============================================
+  # PostgreSQL Database
+  # ============================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: email-campaign-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: email_campaign
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - email-campaign-network
 
-    redis:
-        image: redis:7-alpine
-        container_name: email-campaign-redis
-        restart: unless-stopped
-        ports:
-            - '6379:6379'
-        volumes:
-            - redis_data:/data
-        healthcheck:
-            test: ['CMD', 'redis-cli', 'ping']
-            interval: 10s
-            timeout: 5s
-            retries: 5
-        command: redis-server --appendonly yes
+  # ============================================
+  # Redis Queue Storage
+  # ============================================
+  redis:
+    image: redis:7-alpine
+    container_name: email-campaign-redis
+    restart: unless-stopped
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    command: redis-server --appendonly yes
+    networks:
+      - email-campaign-network
+
+  # ============================================
+  # API Server (Development)
+  # ============================================
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: email-campaign-api
+    restart: unless-stopped
+    ports:
+      - '3000:3000'
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      API_PREFIX: api/v1
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/email_campaign?schema=public
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-production}
+      JWT_EXPIRATION: ${JWT_EXPIRATION:-86400}
+      SENDGRID_API_KEY: ${SENDGRID_API_KEY}
+      SENDGRID_FROM_EMAIL: ${SENDGRID_FROM_EMAIL}
+      SENDGRID_FROM_NAME: ${SENDGRID_FROM_NAME:-Email Campaign Manager}
+    volumes:
+      - .:/app
+      - /app/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: npm run start:dev
+    networks:
+      - email-campaign-network
+
+  # ============================================
+  # Worker Process (Development)
+  # ============================================
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: email-campaign-worker
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/email_campaign?schema=public
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-production}
+      JWT_EXPIRATION: ${JWT_EXPIRATION:-86400}
+      SENDGRID_API_KEY: ${SENDGRID_API_KEY}
+      SENDGRID_FROM_EMAIL: ${SENDGRID_FROM_EMAIL}
+      SENDGRID_FROM_NAME: ${SENDGRID_FROM_NAME:-Email Campaign Manager}
+    volumes:
+      - .:/app
+      - /app/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: npm run worker:dev
+    networks:
+      - email-campaign-network
 
 volumes:
-    postgres_data:
-        name: email-campaign-postgres-data
-    redis_data:
-        name: email-campaign-redis-data
+  postgres_data:
+    name: email-campaign-postgres-data
+  redis_data:
+    name: email-campaign-redis-data
+
+networks:
+  email-campaign-network:
+    name: email-campaign-network
+    driver: bridge
+
+
+## Docker Compose Configuration for Email Campaign Manager (dev when nest js dockerized)
+
+# version: '3.8'
+
+# services:
+#   # ============================================
+#   # PostgreSQL Database
+#   # ============================================
+#   postgres:
+#     image: postgres:16-alpine
+#     container_name: email-campaign-postgres
+#     restart: unless-stopped
+#     environment:
+#       POSTGRES_USER: ${DB_USER:-postgres}
+#       POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+#       POSTGRES_DB: ${DB_NAME:-email_campaign}
+#     ports:
+#       - '5432:5432'
+#     volumes:
+#       - postgres_data:/var/lib/postgresql/data
+#     healthcheck:
+#       test: ['CMD-SHELL', 'pg_isready -U ${DB_USER:-postgres}']
+#       interval: 10s
+#       timeout: 5s
+#       retries: 5
+#     networks:
+#       - email-campaign-network
+
+#   # ============================================
+#   # Redis Queue Storage
+#   # ============================================
+#   redis:
+#     image: redis:7-alpine
+#     container_name: email-campaign-redis
+#     restart: unless-stopped
+#     ports:
+#       - '6379:6379'
+#     volumes:
+#       - redis_data:/data
+#     healthcheck:
+#       test: ['CMD', 'redis-cli', '-a', '${REDIS_PASSWORD:-dev-redis-password}', 'ping']
+#       interval: 10s
+#       timeout: 5s
+#       retries: 5
+#     command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-dev-redis-password}
+#     networks:
+#       - email-campaign-network
+
+#   # ============================================
+#   # API Server
+#   # ============================================
+#   api:
+#     build:
+#       context: .
+#       dockerfile: Dockerfile.dev
+#     container_name: email-campaign-api
+#     restart: unless-stopped
+#     ports:
+#       - '${API_PORT:-3000}:3000'
+#     environment:
+#       NODE_ENV: ${NODE_ENV:-development}
+#       PORT: 3000
+#       API_PREFIX: api/v1
+#       DATABASE_URL: postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-postgres}@postgres:5432/${DB_NAME:-email_campaign}?schema=public
+#       REDIS_HOST: redis
+#       REDIS_PORT: 6379
+#       REDIS_PASSWORD: ${REDIS_PASSWORD:-dev-redis-password}
+#       JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-production}
+#       JWT_EXPIRATION: ${JWT_EXPIRATION:-86400}
+#       SENDGRID_API_KEY: ${SENDGRID_API_KEY}
+#       SENDGRID_FROM_EMAIL: ${SENDGRID_FROM_EMAIL}
+#       SENDGRID_FROM_NAME: ${SENDGRID_FROM_NAME:-Email Campaign Manager}
+#     volumes:
+#       - .:/app
+#       - /app/node_modules
+#     depends_on:
+#       postgres:
+#         condition: service_healthy
+#       redis:
+#         condition: service_healthy
+#     command: npm run start:dev
+#     networks:
+#       - email-campaign-network
+
+#   # ============================================
+#   # Worker Process
+#   # ============================================
+#   worker:
+#     build:
+#       context: .
+#       dockerfile: Dockerfile.dev
+#     container_name: email-campaign-worker
+#     restart: unless-stopped
+#     environment:
+#       NODE_ENV: ${NODE_ENV:-development}
+#       DATABASE_URL: postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-postgres}@postgres:5432/${DB_NAME:-email_campaign}?schema=public
+#       REDIS_HOST: redis
+#       REDIS_PORT: 6379
+#       REDIS_PASSWORD: ${REDIS_PASSWORD:-dev-redis-password}
+#       JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-production}
+#       JWT_EXPIRATION: ${JWT_EXPIRATION:-86400}
+#       SENDGRID_API_KEY: ${SENDGRID_API_KEY}
+#       SENDGRID_FROM_EMAIL: ${SENDGRID_FROM_EMAIL}
+#       SENDGRID_FROM_NAME: ${SENDGRID_FROM_NAME:-Email Campaign Manager}
+#     volumes:
+#       - .:/app
+#       - /app/node_modules
+#     depends_on:
+#       postgres:
+#         condition: service_healthy
+#       redis:
+#         condition: service_healthy
+#     command: npm run worker:dev
+#     networks:
+#       - email-campaign-network
+
+# volumes:
+#   postgres_data:
+#     name: email-campaign-postgres-data
+#   redis_data:
+#     name: email-campaign-redis-data
+
+# networks:
+#   email-campaign-network:
+#     name: email-campaign-network
+#     driver: bridge

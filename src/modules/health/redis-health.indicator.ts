@@ -17,6 +17,7 @@ export class RedisHealthIndicator {
         this.redis = new Redis({
             host: this.configService.get<string>('REDIS_HOST') ?? 'localhost',
             port: this.configService.get<number>('REDIS_PORT') ?? 6379,
+            password: configService.get<string>('REDIS_PASSWORD'),
             maxRetriesPerRequest: 1,
             lazyConnect: true,
         });
