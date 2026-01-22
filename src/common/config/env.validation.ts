@@ -1,5 +1,12 @@
 import { plainToInstance } from 'class-transformer';
-import { IsEnum, IsNumber, IsString, validateSync, ValidationError } from 'class-validator';
+import {
+    IsEnum,
+    IsNumber,
+    IsString,
+    IsOptional,
+    validateSync,
+    ValidationError,
+} from 'class-validator';
 
 enum Environment {
     Development = 'development',
@@ -31,6 +38,16 @@ class EnvironmentVariables {
 
     @IsString()
     JWT_EXPIRATION!: string;
+
+    @IsString()
+    SENDGRID_API_KEY!: string;
+
+    @IsString()
+    SENDGRID_FROM_EMAIL!: string;
+
+    @IsOptional()
+    @IsString()
+    SENDGRID_FROM_NAME?: string;
 }
 
 export function validate(config: Record<string, unknown>): EnvironmentVariables {

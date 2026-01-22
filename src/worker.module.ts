@@ -6,6 +6,7 @@ import appConfig from './common/config/app.config';
 import jwtConfig from './common/config/jwt.config';
 import redisConfig from './common/config/redis.config';
 import { PrismaModule } from './common/prisma';
+import { ServicesModule } from './common/services';
 import { WorkerQueueModule } from './modules/worker-queue/worker-queue.module';
 import { SchedulerModule } from './modules/scheduler/scheduler.module';
 
@@ -19,11 +20,13 @@ import { SchedulerModule } from './modules/scheduler/scheduler.module';
         }),
 
         // Scheduling for cron jobs
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
         ScheduleModule.forRoot(),
 
         // Database
         PrismaModule,
+
+        // Global Services
+        ServicesModule,
 
         // Worker-specific modules
         WorkerQueueModule,

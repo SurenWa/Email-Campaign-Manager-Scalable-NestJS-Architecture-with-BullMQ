@@ -6,6 +6,7 @@ import appConfig from './common/config/app.config';
 import jwtConfig from './common/config/jwt.config';
 import redisConfig from './common/config/redis.config';
 import { PrismaModule } from './common/prisma';
+import { ServicesModule } from './common/services';
 import { HealthModule } from './modules/health/health.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { CampaignModule } from './modules/campaign/campaign.module';
@@ -25,7 +26,10 @@ import { RolesGuard } from './modules/auth/guards/roles.guard';
         // Database
         PrismaModule,
 
-        // Feature modules (API only - no processors)
+        // Global Services
+        ServicesModule,
+
+        // Feature modules
         HealthModule,
         AuthModule,
         CampaignModule,
