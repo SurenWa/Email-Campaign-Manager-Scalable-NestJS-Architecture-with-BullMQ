@@ -1,22 +1,32 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma';
+import { MetricsService } from '../../common/metrics';
 import { CampaignStatus } from '@prisma/client';
 import { CreateCampaignDto, UpdateCampaignDto, ScheduleCampaignDto, CampaignQueryDto } from './dto';
 
 @Injectable()
 export class CampaignService {
-    constructor(private prisma: PrismaService) {}
+    constructor(
+        private prisma: PrismaService,
+        private metricsService: MetricsService,
+    ) {}
 
     async create(userId: string, createCampaignDto: CreateCampaignDto) {
-        return this.prisma.campaign.create({
+        const campaign = await this.prisma.campaign.create({
             data: {
                 ...createCampaignDto,
                 recipients: createCampaignDto.recipients ?? [],
                 userId,
             },
         });
+
+        // Record metric
+        this.metricsService.campaignsCreatedTotal.inc();
+
+        return campaign;
     }
 
+    // ... rest of the methods stay the same
     async findAll(userId: string, query: CampaignQueryDto) {
         const { status, page = 1, limit = 10 } = query;
         const skip = (page - 1) * limit;
@@ -94,7 +104,6 @@ export class CampaignService {
             throw new NotFoundException('Campaign not found');
         }
 
-        // Prevent updating campaigns that are being sent or already sent
         if (campaign.status === CampaignStatus.SENDING || campaign.status === CampaignStatus.SENT) {
             throw new BadRequestException(`Cannot update campaign with status: ${campaign.status}`);
         }
@@ -114,7 +123,6 @@ export class CampaignService {
             throw new NotFoundException('Campaign not found');
         }
 
-        // Prevent deleting campaigns that are being sent
         if (campaign.status === CampaignStatus.SENDING) {
             throw new BadRequestException('Cannot delete campaign while it is being sent');
         }
@@ -135,21 +143,18 @@ export class CampaignService {
             throw new NotFoundException('Campaign not found');
         }
 
-        // Only DRAFT campaigns can be scheduled
         if (campaign.status !== CampaignStatus.DRAFT) {
             throw new BadRequestException(
                 `Cannot schedule campaign with status: ${campaign.status}. Only DRAFT campaigns can be scheduled.`,
             );
         }
 
-        // Validate recipients exist
         if (!campaign.recipients || campaign.recipients.length === 0) {
             throw new BadRequestException(
                 'Campaign must have at least one recipient before scheduling',
             );
         }
 
-        // Validate scheduled time is in the future
         const scheduledAt = new Date(scheduleCampaignDto.scheduledAt);
         if (scheduledAt <= new Date()) {
             throw new BadRequestException('Scheduled time must be in the future');

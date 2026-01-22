@@ -7,6 +7,7 @@ import jwtConfig from './common/config/jwt.config';
 import redisConfig from './common/config/redis.config';
 import { PrismaModule } from './common/prisma';
 import { ServicesModule } from './common/services';
+import { MetricsModule } from './common/metrics';
 import { WorkerQueueModule } from './modules/worker-queue/worker-queue.module';
 import { SchedulerModule } from './modules/scheduler/scheduler.module';
 
@@ -27,6 +28,9 @@ import { SchedulerModule } from './modules/scheduler/scheduler.module';
 
         // Global Services
         ServicesModule,
+
+        // Metrics
+        MetricsModule,
 
         // Worker-specific modules
         WorkerQueueModule,

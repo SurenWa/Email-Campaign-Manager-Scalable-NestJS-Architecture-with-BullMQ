@@ -3,6 +3,7 @@ import { Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { PrismaService } from '../../../common/prisma';
 import { EmailService } from '../../../common/services';
+import { MetricsService } from '../../../common/metrics';
 import { CampaignStatus, EmailStatus } from '@prisma/client';
 import { EMAIL_QUEUE } from '../../email-queue/email-queue.service';
 import type { EmailJobData } from '../../email-queue/interfaces';
@@ -14,22 +15,25 @@ export class EmailProcessor extends WorkerHost {
     constructor(
         private prisma: PrismaService,
         private emailService: EmailService,
+        private metricsService: MetricsService,
     ) {
         super();
     }
 
     async process(job: Job<EmailJobData>): Promise<void> {
         const { emailLogId, recipient, subject, content, campaignId, attempt } = job.data;
+        const startTime = Date.now();
 
         this.logger.log(`Sending email to ${recipient} (attempt ${attempt}, job ${job.id})`);
 
         try {
-            // Send email using EmailService
             const result = await this.emailService.sendEmail({
                 to: recipient,
                 subject,
                 html: content,
             });
+
+            const duration = (Date.now() - startTime) / 1000;
 
             if (!result.success) {
                 throw new Error(result.error ?? 'Email sending failed');
@@ -46,17 +50,26 @@ export class EmailProcessor extends WorkerHost {
                 },
             });
 
+            // Record metrics
+            this.metricsService.emailsSentTotal.labels(campaignId).inc();
+            this.metricsService.emailSendDuration.labels('success').observe(duration);
+            this.metricsService.queueJobsCompleted.labels(EMAIL_QUEUE).inc();
+
             this.logger.log(
                 `Email sent successfully to ${recipient} (messageId: ${result.messageId})`,
             );
 
-            // Check if all emails for this campaign are processed
             await this.checkCampaignCompletion(campaignId);
         } catch (error) {
+            const duration = (Date.now() - startTime) / 1000;
             const errorMessage = error instanceof Error ? error.message : String(error);
+
             this.logger.error(`Failed to send email to ${recipient}: ${errorMessage}`);
 
-            // Update attempt count and error
+            // Record failure metrics
+            this.metricsService.emailsFailedTotal.labels(campaignId, 'send_error').inc();
+            this.metricsService.emailSendDuration.labels('failure').observe(duration);
+
             await this.prisma.emailLog.update({
                 where: { id: emailLogId },
                 data: {
@@ -65,7 +78,7 @@ export class EmailProcessor extends WorkerHost {
                 },
             });
 
-            throw error; // Re-throw to trigger retry
+            throw error;
         }
     }
 
@@ -87,7 +100,6 @@ export class EmailProcessor extends WorkerHost {
         const pending = statusCounts[EmailStatus.PENDING] ?? 0;
         const queued = statusCounts[EmailStatus.QUEUED] ?? 0;
 
-        // If no pending or queued emails, campaign is complete
         if (pending === 0 && queued === 0) {
             const sent = statusCounts[EmailStatus.SENT] ?? 0;
             const failed = statusCounts[EmailStatus.FAILED] ?? 0;
@@ -99,6 +111,9 @@ export class EmailProcessor extends WorkerHost {
                     sentAt: new Date(),
                 },
             });
+
+            // Record campaign sent metric
+            this.metricsService.campaignsSentTotal.inc();
 
             this.logger.log(`Campaign ${campaignId} completed: ${sent} sent, ${failed} failed`);
         }
@@ -116,18 +131,15 @@ export class EmailProcessor extends WorkerHost {
                 `Email job ${job.id} failed for ${job.data.recipient}: ${error.message}`,
             );
 
-            // If all retries exhausted, mark as failed
+            this.metricsService.queueJobsFailed.labels(EMAIL_QUEUE).inc();
+
             if (job.attemptsMade >= (job.opts.attempts ?? 5)) {
                 void this.markEmailAsFailed(job.data.emailLogId, error.message);
             }
         }
     }
 
-    // eslint-disable-next-line prettier/prettier
-    private async markEmailAsFailed(
-        emailLogId: string,
-        errorMessage: string,
-    ): Promise<void> {
+    private async markEmailAsFailed(emailLogId: string, errorMessage: string): Promise<void> {
         await this.prisma.emailLog.update({
             where: { id: emailLogId },
             data: {
