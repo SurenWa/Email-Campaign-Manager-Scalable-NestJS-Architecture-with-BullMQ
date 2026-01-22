@@ -1,11 +1,13 @@
 import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 import { ConfigService } from '@nestjs/config';
-import { EmailQueueService, CAMPAIGN_QUEUE, EMAIL_QUEUE } from './email-queue.service';
+import { CAMPAIGN_QUEUE, EMAIL_QUEUE } from '../email-queue/email-queue.service';
+import { CampaignProcessor } from './processors/campaign.processor';
+import { EmailProcessor } from './processors/email.processor';
 
 @Module({
     imports: [
-        // Register Campaign Queue (for adding jobs only)
+        // Register Campaign Queue (for worker)
         BullModule.registerQueueAsync({
             name: CAMPAIGN_QUEUE,
             inject: [ConfigService],
@@ -14,16 +16,9 @@ import { EmailQueueService, CAMPAIGN_QUEUE, EMAIL_QUEUE } from './email-queue.se
                     host: configService.get<string>('REDIS_HOST') ?? 'localhost',
                     port: configService.get<number>('REDIS_PORT') ?? 6379,
                 },
-                defaultJobOptions: {
-                    attempts: 3,
-                    backoff: {
-                        type: 'exponential',
-                        delay: 5000,
-                    },
-                },
             }),
         }),
-        // Register Email Queue (for stats only in API)
+        // Register Email Queue (for worker)
         BullModule.registerQueueAsync({
             name: EMAIL_QUEUE,
             inject: [ConfigService],
@@ -35,7 +30,6 @@ import { EmailQueueService, CAMPAIGN_QUEUE, EMAIL_QUEUE } from './email-queue.se
             }),
         }),
     ],
-    providers: [EmailQueueService],
-    exports: [EmailQueueService],
+    providers: [CampaignProcessor, EmailProcessor],
 })
-export class EmailQueueModule {}
+export class WorkerQueueModule {}

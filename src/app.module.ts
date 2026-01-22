@@ -25,7 +25,7 @@ import { RolesGuard } from './modules/auth/guards/roles.guard';
         // Database
         PrismaModule,
 
-        // Feature modules
+        // Feature modules (API only - no processors)
         HealthModule,
         AuthModule,
         CampaignModule,

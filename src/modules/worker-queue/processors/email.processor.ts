@@ -3,8 +3,8 @@ import { Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { PrismaService } from '../../../common/prisma';
 import { CampaignStatus, EmailStatus } from '@prisma/client';
-import { EMAIL_QUEUE } from '../email-queue.service';
-import type { EmailJobData } from '../interfaces';
+import { EMAIL_QUEUE } from '../../email-queue/email-queue.service';
+import type { EmailJobData } from '../../email-queue/interfaces';
 
 @Processor(EMAIL_QUEUE)
 export class EmailProcessor extends WorkerHost {
@@ -20,11 +20,8 @@ export class EmailProcessor extends WorkerHost {
         this.logger.log(`Sending email to ${recipient} (attempt ${attempt}, job ${job.id})`);
 
         try {
-            // Simulate email sending
-            // In production, replace this with actual email service (SendGrid, SES, etc.)
             await this.simulateEmailSend(recipient, subject);
 
-            // Update email log status to SENT
             await this.prisma.emailLog.update({
                 where: { id: emailLogId },
                 data: {
@@ -36,12 +33,10 @@ export class EmailProcessor extends WorkerHost {
 
             this.logger.log(`Email sent successfully to ${recipient}`);
 
-            // Check if all emails for this campaign are processed
             await this.checkCampaignCompletion(campaignId);
         } catch (error) {
             this.logger.error(`Failed to send email to ${recipient}: ${error}`);
 
-            // Update attempt count
             await this.prisma.emailLog.update({
                 where: { id: emailLogId },
                 data: {
@@ -50,13 +45,10 @@ export class EmailProcessor extends WorkerHost {
                 },
             });
 
-            throw error; // Re-throw to trigger retry
+            throw error;
         }
     }
 
-    /**
-     * Simulate email sending (replace with real email service in production)
-     */
     private async simulateEmailSend(recipient: string, subject: string): Promise<void> {
         // Simulate network delay
         await new Promise((resolve) => setTimeout(resolve, 500 + Math.random() * 1000));
@@ -69,9 +61,6 @@ export class EmailProcessor extends WorkerHost {
         this.logger.debug(`[SIMULATED] Email sent to ${recipient}: ${subject}`);
     }
 
-    /**
-     * Check if all emails for a campaign have been processed
-     */
     private async checkCampaignCompletion(campaignId: string): Promise<void> {
         const stats = await this.prisma.emailLog.groupBy({
             by: ['status'],
@@ -90,17 +79,14 @@ export class EmailProcessor extends WorkerHost {
         const pending = statusCounts[EmailStatus.PENDING] ?? 0;
         const queued = statusCounts[EmailStatus.QUEUED] ?? 0;
 
-        // If no pending or queued emails, campaign is complete
         if (pending === 0 && queued === 0) {
             const sent = statusCounts[EmailStatus.SENT] ?? 0;
             const failed = statusCounts[EmailStatus.FAILED] ?? 0;
 
-            const finalStatus = failed === 0 ? CampaignStatus.SENT : CampaignStatus.SENT; // Could use PARTIAL_SENT if needed
-
             await this.prisma.campaign.update({
                 where: { id: campaignId },
                 data: {
-                    status: finalStatus,
+                    status: CampaignStatus.SENT,
                     sentAt: new Date(),
                 },
             });
@@ -121,7 +107,6 @@ export class EmailProcessor extends WorkerHost {
                 `Email job ${job.id} failed for ${job.data.recipient}: ${error.message}`,
             );
 
-            // If all retries exhausted, mark as failed
             if (job.attemptsMade >= (job.opts.attempts ?? 5)) {
                 // eslint-disable-next-line @typescript-eslint/no-floating-promises
                 this.markEmailAsFailed(job.data.emailLogId, error.message);

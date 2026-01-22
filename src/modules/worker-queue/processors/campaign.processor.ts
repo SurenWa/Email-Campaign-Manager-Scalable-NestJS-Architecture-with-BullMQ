@@ -4,8 +4,8 @@ import { Job, Queue } from 'bullmq';
 import { InjectQueue } from '@nestjs/bullmq';
 import { PrismaService } from '../../../common/prisma';
 import { CampaignStatus, EmailStatus } from '@prisma/client';
-import { CAMPAIGN_QUEUE, EMAIL_QUEUE } from '../email-queue.service';
-import type { CampaignJobData, EmailJobData } from '../interfaces';
+import { CAMPAIGN_QUEUE, EMAIL_QUEUE } from '../../email-queue/email-queue.service';
+import type { CampaignJobData, EmailJobData } from '../../email-queue/interfaces';
 
 @Processor(CAMPAIGN_QUEUE)
 export class CampaignProcessor extends WorkerHost {
@@ -24,7 +24,6 @@ export class CampaignProcessor extends WorkerHost {
         this.logger.log(`Processing campaign: ${campaignId}`);
 
         try {
-            // Get campaign with recipients
             const campaign = await this.prisma.campaign.findUnique({
                 where: { id: campaignId },
             });
@@ -67,7 +66,7 @@ export class CampaignProcessor extends WorkerHost {
                     attempts: 5,
                     backoff: {
                         type: 'exponential' as const,
-                        delay: 3000, // Start with 3 seconds
+                        delay: 3000,
                     },
                     removeOnComplete: 100,
                     removeOnFail: 500,
@@ -82,7 +81,6 @@ export class CampaignProcessor extends WorkerHost {
         } catch (error) {
             this.logger.error(`Failed to process campaign ${campaignId}: ${error}`);
 
-            // Mark campaign as failed
             await this.prisma.campaign.update({
                 where: { id: campaignId },
                 data: { status: CampaignStatus.FAILED },
