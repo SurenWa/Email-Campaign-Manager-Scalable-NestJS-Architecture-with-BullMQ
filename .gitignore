@@ -17,6 +17,8 @@ build/
 # ===============================
 .env
 .env.local
+.env.docker
+.env.docker.prod
 .env.development
 .env.test
 .env.production
